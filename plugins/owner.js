@@ -13,8 +13,11 @@ const OWNER_NUMBER = '5217715555998'
 const OWNER_JID = `${OWNER_NUMBER}@s.whatsapp.net`
 
 function soloOwner(m) {
-  const sender = m.sender.replace(/[^0-9]/g, '')
-  return sender === OWNER_NUMBER
+  const senderNum = m.sender.replace(/[^0-9]/g, '')
+  const ownerNum = OWNER_NUMBER.replace(/[^0-9]/g, '')
+  const ownerLids = global.ownerLid || []
+
+  return senderNum === ownerNum || ownerLids.includes(m.sender)
 }
 
 function parseDias(txt = '') {
