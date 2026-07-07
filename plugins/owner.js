@@ -10,6 +10,7 @@ import {
 } from '../lib/grupos.js'
 
 const OWNER_NUMBER = '5217715555998'
+global.zenturyTimers = global.zenturyTimers || {}
 
 function soloOwner(m) {
   const senderNum = m.sender.replace(/[^0-9]/g, '')
@@ -20,18 +21,36 @@ function soloOwner(m) {
 
 function parseTiempo(txt = '') {
   const match = txt.match(/(\d+)\s*(m|h|d)/i)
-
-  if (!match) {
-    return { cantidad: 30, unidad: 'd', ms: 30 * 86400000, texto: '30 días' }
-  }
+  if (!match) return { cantidad: 30, unidad: 'd', ms: 30 * 86400000, texto: '30 días' }
 
   const cantidad = Number(match[1])
   const unidad = match[2].toLowerCase()
 
-  if (unidad === 'm') return { cantidad, unidad, ms: cantidad * 60000, texto: `${cantidad} minuto${cantidad === 1 ? '' : 's'}` }
-  if (unidad === 'h') return { cantidad, unidad, ms: cantidad * 3600000, texto: `${cantidad} hora${cantidad === 1 ? '' : 's'}` }
+  if (unidad === 'm') return { cantidad, ms: cantidad * 60000, texto: `${cantidad} minuto${cantidad === 1 ? '' : 's'}` }
+  if (unidad === 'h') return { cantidad, ms: cantidad * 3600000, texto: `${cantidad} hora${cantidad === 1 ? '' : 's'}` }
+  return { cantidad, ms: cantidad * 86400000, texto: `${cantidad} día${cantidad === 1 ? '' : 's'}` }
+}
 
-  return { cantidad, unidad, ms: cantidad * 86400000, texto: `${cantidad} día${cantidad === 1 ? '' : 's'}` }
+function iniciarContador(conn, groupId, tiempo) {
+  if (global.zenturyTimers[groupId]) {
+    clearTimeout(global.zenturyTimers[groupId])
+  }
+
+  global.zenturyTimers[groupId] = setTimeout(async () => {
+    desactivarGrupo(groupId)
+
+    await conn.sendMessage(groupId, {
+      text: `⏰ *TIEMPO TERMINADO*
+
+🔴 Zentury Bot se desactivó automáticamente.
+
+Para renovar el servicio usa:
+
+.owner`
+    }).catch(() => {})
+
+    delete global.zenturyTimers[groupId]
+  }, tiempo.ms)
 }
 
 const handler = async (m, { conn, command, text }) => {
@@ -87,12 +106,18 @@ Escribe:
 .menu`
 
     await conn.sendMessage(groupId, { text: msgGrupo }).catch(() => {})
+    iniciarContador(conn, groupId, tiempo)
     return
   }
 
   if (command === 'desactivar') {
     let groupId = text.trim() || m.chat
     if (!groupId.endsWith('@g.us')) return m.reply('Uso:\n.desactivar\n.desactivar ID')
+
+    if (global.zenturyTimers[groupId]) {
+      clearTimeout(global.zenturyTimers[groupId])
+      delete global.zenturyTimers[groupId]
+    }
 
     desactivarGrupo(groupId)
 
