@@ -10,19 +10,28 @@ import {
 } from '../lib/grupos.js'
 
 const OWNER_NUMBER = '5217715555998'
-const OWNER_JID = `${OWNER_NUMBER}@s.whatsapp.net`
 
 function soloOwner(m) {
   const senderNum = m.sender.replace(/[^0-9]/g, '')
   const ownerNum = OWNER_NUMBER.replace(/[^0-9]/g, '')
   const ownerLids = global.ownerLid || []
-
   return senderNum === ownerNum || ownerLids.includes(m.sender)
 }
 
-function parseDias(txt = '') {
-  const match = txt.match(/(\d+)\s*d/i)
-  return match ? Number(match[1]) : 30
+function parseTiempo(txt = '') {
+  const match = txt.match(/(\d+)\s*(m|h|d)/i)
+
+  if (!match) {
+    return { cantidad: 30, unidad: 'd', ms: 30 * 86400000, texto: '30 días' }
+  }
+
+  const cantidad = Number(match[1])
+  const unidad = match[2].toLowerCase()
+
+  if (unidad === 'm') return { cantidad, unidad, ms: cantidad * 60000, texto: `${cantidad} minuto${cantidad === 1 ? '' : 's'}` }
+  if (unidad === 'h') return { cantidad, unidad, ms: cantidad * 3600000, texto: `${cantidad} hora${cantidad === 1 ? '' : 's'}` }
+
+  return { cantidad, unidad, ms: cantidad * 86400000, texto: `${cantidad} día${cantidad === 1 ? '' : 's'}` }
 }
 
 const handler = async (m, { conn, command, text }) => {
@@ -35,26 +44,20 @@ TEL;type=CELL;type=VOICE;waid=${OWNER_NUMBER}:+${OWNER_NUMBER}
 END:VCARD`
 
     await conn.sendMessage(m.chat, {
-      contacts: {
-        displayName: 'ALAN SHOP',
-        contacts: [{ vcard }]
-      }
+      contacts: { displayName: 'ALAN SHOP', contacts: [{ vcard }] }
     }, { quoted: m })
-
     return
   }
 
-  if (!soloOwner(m)) {
-    return m.reply('❌ Este comando solo puede usarlo el owner.')
-  }
+  if (!soloOwner(m)) return m.reply('❌ Este comando solo puede usarlo el owner.')
 
   if (command === 'activar') {
     let args = text.trim().split(/\s+/)
     let groupId = m.isGroup ? m.chat : args[0]
-    let dias = m.isGroup ? parseDias(text) : parseDias(args.slice(1).join(' '))
+    let tiempo = m.isGroup ? parseTiempo(text) : parseTiempo(args.slice(1).join(' '))
 
     if (!groupId || !groupId.endsWith('@g.us')) {
-      return m.reply('Uso:\n.activar 30d\n.activar ID 30d')
+      return m.reply('Uso:\n.activar 3m\n.activar 2h\n.activar 30d\n.activar ID 30d')
     }
 
     let nombre = 'Grupo sin nombre'
@@ -63,14 +66,14 @@ END:VCARD`
       nombre = meta.subject || nombre
     } catch {}
 
-    const config = activarGrupo(groupId, dias, nombre)
+    const config = activarGrupo(groupId, tiempo.ms, nombre, true)
 
     const msgGrupo = `🤖 *ZENTURY BOT ACTIVADO*
 
 Hola, grupo 👋
 
 ✅ Este grupo ya está activado.
-⏳ Duración: ${dias} días
+⏳ Duración: ${tiempo.texto}
 📅 Vence: ${formatearFecha(config.vence)}
 
 Ya pueden usar mis funciones:
@@ -84,45 +87,31 @@ Escribe:
 .menu`
 
     await conn.sendMessage(groupId, { text: msgGrupo }).catch(() => {})
-
-    return m.reply(`✅ Grupo activado correctamente.
-
-👥 ${nombre}
-🆔 ${groupId}
-⏳ ${dias} días
-📅 Vence: ${formatearFecha(config.vence)}`)
+    return
   }
 
   if (command === 'desactivar') {
     let groupId = text.trim() || m.chat
-
-    if (!groupId.endsWith('@g.us')) {
-      return m.reply('Uso:\n.desactivar\n.desactivar ID')
-    }
+    if (!groupId.endsWith('@g.us')) return m.reply('Uso:\n.desactivar\n.desactivar ID')
 
     desactivarGrupo(groupId)
 
-    const msgGrupo = `🔴 *ZENTURY BOT DESACTIVADO*
+    await conn.sendMessage(groupId, {
+      text: `🔴 *ZENTURY BOT DESACTIVADO*
 
 Este grupo ya no cuenta con activación vigente.
 
 Para contratar o renovar el servicio usa:
 
 .owner`
+    }).catch(() => {})
 
-    await conn.sendMessage(groupId, { text: msgGrupo }).catch(() => {})
-
-    return m.reply(`🔴 Grupo desactivado correctamente.
-
-🆔 ${groupId}`)
+    return m.reply('🔴 Grupo desactivado correctamente.')
   }
 
   if (command === 'estado') {
     let groupId = text.trim() || m.chat
-
-    if (!groupId.endsWith('@g.us')) {
-      return m.reply('Uso:\n.estado\n.estado ID')
-    }
+    if (!groupId.endsWith('@g.us')) return m.reply('Uso:\n.estado\n.estado ID')
 
     const config = obtenerConfigGrupo(groupId)
     const dias = diasRestantes(groupId)
@@ -150,14 +139,10 @@ ${formatearFecha(config.vence)}`)
 
   if (command === 'grupos') {
     const grupos = listarGrupos()
-
-    if (!grupos.length) {
-      return m.reply('📋 No hay grupos registrados todavía.')
-    }
+    if (!grupos.length) return m.reply('📋 No hay grupos registrados todavía.')
 
     let activos = 0
     let inactivos = 0
-
     let txt = `📋 *ZENTURY BOT*
 
 Grupos conectados: ${grupos.length}
@@ -167,7 +152,6 @@ Grupos conectados: ${grupos.length}
     grupos.forEach((g, i) => {
       const dias = diasRestantes(g.id)
       const activo = g.activo && dias > 0
-
       if (activo) activos++
       else inactivos++
 
@@ -187,35 +171,23 @@ Desactivados: ${inactivos}`
 
   if (command === 'exit') {
     const groupId = text.trim()
+    if (!groupId.endsWith('@g.us')) return m.reply('Uso:\n.exit ID')
 
-    if (!groupId.endsWith('@g.us')) {
-      return m.reply('Uso:\n.exit ID')
-    }
-
-    await conn.sendMessage(groupId, {
-      text: '👋 Zentury Bot saldrá del grupo.'
-    }).catch(() => {})
-
+    await conn.sendMessage(groupId, { text: '👋 Zentury Bot saldrá del grupo.' }).catch(() => {})
     await conn.groupLeave(groupId)
-
-    return m.reply(`✅ Salí del grupo:
-
-${groupId}`)
+    return m.reply(`✅ Salí del grupo:\n\n${groupId}`)
   }
 
   if (command === 'enviaraviso') {
     const [groupId, ...msg] = text.trim().split(/\s+/)
-
     if (!groupId || !groupId.endsWith('@g.us') || !msg.length) {
       return m.reply('Uso:\n.enviaraviso ID mensaje')
     }
 
-    const aviso = msg.join(' ')
-
     await conn.sendMessage(groupId, {
       text: `📢 *AVISO*
 
-${aviso}`
+${msg.join(' ')}`
     })
 
     return m.reply('✅ Aviso enviado correctamente.')
@@ -224,21 +196,15 @@ ${aviso}`
   if (command === 'setbanner') {
     const q = m.quoted || m
     const mime = (q.msg || q).mimetype || ''
-
-    if (!/image/.test(mime)) {
-      return m.reply('Responde a una imagen con:\n.setbanner')
-    }
+    if (!/image/.test(mime)) return m.reply('Responde a una imagen con:\n.setbanner')
 
     const dir = './storage/img'
     const file = path.join(dir, 'catalogo.png')
 
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
     const buffer = await q.download()
     if (fs.existsSync(file)) fs.unlinkSync(file)
-
     fs.writeFileSync(file, buffer)
 
     return m.reply('✅ Banner actualizado correctamente.\n\nAhora .menu usará la nueva imagen.')
@@ -251,27 +217,14 @@ ${aviso}`
     const botId = conn.user.jid
     const bot = groupMetadata.participants.find(p => p.id === botId)
 
-    if (!bot?.admin) {
-      return m.reply('❌ Necesito ser administrador para dar admin.')
-    }
+    if (!bot?.admin) return m.reply('❌ Necesito ser administrador para dar admin.')
 
     await conn.groupParticipantsUpdate(m.chat, [m.sender], 'promote')
     return m.reply('👑 Owner promovido a administrador.')
   }
 }
 
-handler.help = [
-  'owner',
-  'activar',
-  'desactivar',
-  'estado',
-  'grupos',
-  'exit',
-  'enviaraviso',
-  'setbanner',
-  'autoadmin'
-]
-
+handler.help = ['owner', 'activar', 'desactivar', 'estado', 'grupos', 'exit', 'enviaraviso', 'setbanner', 'autoadmin']
 handler.tags = ['owner']
 handler.command = /^(owner|activar|desactivar|estado|grupos|exit|enviaraviso|setbanner|autoadmin)$/i
 
