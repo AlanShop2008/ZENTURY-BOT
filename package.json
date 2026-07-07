@@ -1,0 +1,24 @@
+{
+  "name": "zentury-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "@hapi/boom": "latest",
+    "chokidar": "latest",
+    "cfonts": "latest",
+    "chalk": "latest",
+    "pino": "latest",
+    "node-cache": "latest",
+    "lowdb": "latest",
+    "lodash": "latest",
+    "yargs": "latest",
+    "syntax-error": "latest",
+    "google-libphonenumber": "latest",
+    "ws": "latest"
+  }
+}
