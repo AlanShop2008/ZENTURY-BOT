@@ -1,24 +1,33 @@
 {
   "name": "zentury-bot",
   "version": "1.0.0",
+  "description": "Zentury Bot - WhatsApp store and group automation bot",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "latest",
     "@hapi/boom": "latest",
+    "@whiskeysockets/baileys": "latest",
+    "awesome-phonenumber": "latest",
+    "chalk": "latest",
     "chokidar": "latest",
     "cfonts": "latest",
-    "chalk": "latest",
-    "pino": "latest",
-    "node-cache": "latest",
-    "lowdb": "latest",
-    "lodash": "latest",
-    "yargs": "latest",
-    "syntax-error": "latest",
+    "file-type": "latest",
     "google-libphonenumber": "latest",
-    "ws": "latest"
+    "lodash": "latest",
+    "lowdb": "latest",
+    "node-cache": "latest",
+    "node-fetch": "latest",
+    "pino": "latest",
+    "qrcode-terminal": "latest",
+    "syntax-error": "latest",
+    "ws": "latest",
+    "yargs": "latest"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
