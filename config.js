@@ -2,6 +2,10 @@ global.owner = [
   ['5217715555998', 'Alan Shop', true]
 ]
 
+global.ownerLid = [
+  '82816314421258'
+]
+
 global.mods = []
 global.prems = []
 
