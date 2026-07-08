@@ -9,6 +9,7 @@ import {
 } from '../lib/tienda.js'
 
 import { prepararImportacion } from '../lib/importador.js'
+import { listarGrupos } from '../lib/grupos.js'
 
 function obtenerUsuario(m, args = []) {
   if (m.mentionedJid && m.mentionedJid.length) return m.mentionedJid[0]
@@ -34,13 +35,84 @@ function obtenerCantidad(args = []) {
   return limpio ? Number(limpio) : NaN
 }
 
+function obtenerGrupoPorNumero(valor) {
+  if (!/^\d+$/.test(String(valor))) return null
+
+  const grupos = listarGrupos()
+  const index = Number(valor) - 1
+
+  return grupos[index] || null
+}
+
 const handler = async (m, { conn, command, args }) => {
+  if (command === 'grupos') {
+    const grupos = listarGrupos()
+
+    if (!grupos.length) {
+      return m.reply('❌ No hay grupos registrados todavía.')
+    }
+
+    let texto = `📋 *GRUPOS ZENTURY BOT*
+
+`
+
+    grupos.forEach((g, i) => {
+      texto += `${i + 1}️⃣ *${g.nombre || 'Grupo sin nombre'}*
+🆔 ${g.id}
+
+`
+    })
+
+    texto += `━━━━━━━━━━━━━━━━
+
+Para cargar stock por privado:
+
+.addstock NUMERO netflix perfil 35
+
+Ejemplo:
+.addstock 3 netflix perfil 35`
+
+    return m.reply(texto)
+  }
+
   if (command === 'tienda') {
     return m.reply(generarTienda(m.chat))
   }
 
   if (command === 'addstock') {
-    if (args.length < 3) return m.reply('Uso:\n.addstock netflix perfil 35')
+    if (m.isGroup) {
+      return m.reply('❌ Este comando solo se usa por privado con el bot.')
+    }
+
+    if (args.length < 4) {
+      return m.reply(`Uso:
+.addstock NUMERO netflix perfil 35
+.addstock ID_GRUPO netflix perfil 35
+
+Primero usa:
+.grupos`)
+    }
+
+    let groupId = args[0]
+    const grupoPorNumero = obtenerGrupoPorNumero(groupId)
+
+    if (grupoPorNumero) {
+      groupId = grupoPorNumero.id
+    }
+
+    const plataforma = args[1]
+    const tipo = args[2]
+    const precio = args[3]
+
+    if (!groupId.endsWith('@g.us')) {
+      return m.reply(`❌ Grupo inválido.
+
+Usa:
+.grupos
+
+Luego:
+.addstock NUMERO netflix perfil 35`)
+    }
 
     const q = m.quoted
     if (!q) return m.reply('Responde a un mensaje o TXT con las cuentas.')
@@ -56,18 +128,26 @@ const handler = async (m, { conn, command, args }) => {
     const cuentas = prepararImportacion(texto)
     if (!cuentas.length) return m.reply('❌ No detecté cuentas para agregar.')
 
-    const res = agregarStock(m.chat, args[0], args[1], args[2], cuentas, m.sender)
+    const res = agregarStock(groupId, plataforma, tipo, precio, cuentas, m.sender)
+
+    const nombreGrupo = grupoPorNumero?.nombre || groupId
 
     return m.reply(`📦 *STOCK CARGADO*
 
+👥 Grupo:
+${nombreGrupo}
+
+🆔 ID:
+${groupId}
+
 🎬 Plataforma:
-${args[0]}
+${plataforma}
 
 📂 Tipo:
-${args[1]}
+${tipo}
 
 💵 Precio:
-$${args[2]}
+$${precio}
 
 ✅ Agregadas:
 ${res.agregadas}
@@ -218,8 +298,8 @@ $${saldo.actual}`,
   }
 }
 
-handler.help = ['tienda', 'addstock', 'comprar', 'versaldo', 'addsaldo', 'delsaldo', 'editarprecio']
+handler.help = ['grupos', 'tienda', 'addstock', 'comprar', 'versaldo', 'addsaldo', 'delsaldo', 'editarprecio']
 handler.tags = ['tienda']
-handler.command = /^(tienda|addstock|comprar|versaldo|addsaldo|delsaldo|editarprecio)$/i
+handler.command = /^(grupos|tienda|addstock|comprar|versaldo|addsaldo|delsaldo|editarprecio)$/i
 
 export default handler
