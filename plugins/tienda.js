@@ -10,6 +10,25 @@ import {
 
 import { prepararImportacion } from '../lib/importador.js'
 
+function obtenerUsuario(m, args = []) {
+  if (m.mentionedJid && m.mentionedJid.length) return m.mentionedJid[0]
+
+  if (m.quoted && m.quoted.sender) return m.quoted.sender
+
+  const posible = args.find(a => /\d{8,}/.test(a))
+  if (posible) return posible.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
+
+  return null
+}
+
+function obtenerCantidad(args = []) {
+  const num = args
+    .map(a => String(a).replace(/[^0-9.]/g, ''))
+    .find(a => a && !isNaN(Number(a)))
+
+  return num ? Number(num) : NaN
+}
+
 const handler = async (m, { conn, command, args }) => {
   if (command === 'tienda') {
     return m.reply(generarTienda(m.chat))
@@ -107,16 +126,22 @@ $${res.saldoRestante}`)
   }
 
   if (command === 'addsaldo') {
-    const user = m.mentionedJid?.[0]
-    const cantidad = Number(args[1])
+    const user = obtenerUsuario(m, args)
+    const cantidad = obtenerCantidad(args)
 
     if (!user || isNaN(cantidad)) {
-      return m.reply('Uso:\n.addsaldo @usuario 200')
+      return m.reply(`Uso:
+.addsaldo @usuario 200
+.addsaldo 5217715555998 200
+
+También puedes responder a un mensaje con:
+.addsaldo 200`)
     }
 
     const saldo = registrarSaldo(m.chat, user, cantidad)
 
-    return m.reply(`✅ Saldo agregado.
+    return conn.sendMessage(m.chat, {
+      text: `✅ Saldo agregado.
 
 👤 Usuario:
 @${user.split('@')[0]}
@@ -125,26 +150,36 @@ $${res.saldoRestante}`)
 $${cantidad}
 
 💰 Saldo actual:
-$${saldo.actual}`, null, { mentions: [user] })
+$${saldo.actual}`,
+      mentions: [user]
+    }, { quoted: m })
   }
 
   if (command === 'delsaldo') {
-    const user = m.mentionedJid?.[0]
-    const cantidad = Number(args[1])
+    const user = obtenerUsuario(m, args)
+    const cantidad = obtenerCantidad(args)
 
     if (!user || isNaN(cantidad)) {
-      return m.reply('Uso:\n.delsaldo @usuario 50')
+      return m.reply(`Uso:
+.delsaldo @usuario 50
+.delsaldo 5217715555998 50
+
+También puedes responder a un mensaje con:
+.delsaldo 50`)
     }
 
     const saldo = restarSaldo(m.chat, user, cantidad)
 
-    return m.reply(`✅ Saldo actualizado.
+    return conn.sendMessage(m.chat, {
+      text: `✅ Saldo actualizado.
 
 👤 Usuario:
 @${user.split('@')[0]}
 
 💰 Saldo actual:
-$${saldo.actual}`, null, { mentions: [user] })
+$${saldo.actual}`,
+      mentions: [user]
+    }, { quoted: m })
   }
 
   if (command === 'editarprecio') {
