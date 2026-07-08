@@ -10,240 +10,168 @@ import {
 
 import { prepararImportacion } from '../lib/importador.js'
 
-const handler = async (m, { conn, command, args, text }) => {
-
-  // =====================
-  // TIENDA
-  // =====================
-
+const handler = async (m, { conn, command, args }) => {
   if (command === 'tienda') {
     return m.reply(generarTienda(m.chat))
   }
 
-  // =====================
-  // VER SALDO
-  // =====================
+  if (command === 'addstock') {
+    if (args.length < 3) return m.reply('Uso:\n.addstock netflix perfil 35')
+
+    const q = m.quoted
+    if (!q) return m.reply('Responde a un mensaje o TXT con las cuentas.')
+
+    let texto = ''
+
+    if (q.text) texto = q.text
+    else {
+      const buffer = await q.download()
+      texto = buffer.toString()
+    }
+
+    const cuentas = prepararImportacion(texto)
+
+    if (!cuentas.length) return m.reply('❌ No detecté cuentas para agregar.')
+
+    const res = agregarStock(
+      m.chat,
+      args[0],
+      args[1],
+      args[2],
+      cuentas,
+      m.sender
+    )
+
+    return m.reply(`📦 *STOCK CARGADO*
+
+🎬 Plataforma:
+${args[0]}
+
+📂 Tipo:
+${args[1]}
+
+💵 Precio:
+$${args[2]}
+
+✅ Agregadas:
+${res.agregadas}
+
+⚠️ Duplicadas:
+${res.duplicadas}
+
+📦 Disponibles:
+${res.total}`)
+  }
+
+  if (command === 'comprar') {
+    if (args.length < 2) return m.reply('Uso:\n.comprar netflix perfil')
+
+    const res = comprarProducto(m.chat, m.sender, args[0], args[1])
+
+    if (!res.ok) {
+      if (res.motivo === 'producto_no_existe') return m.reply('❌ Producto no disponible.')
+      if (res.motivo === 'sin_stock') return m.reply('❌ Sin stock disponible.')
+      if (res.motivo === 'saldo_insuficiente') {
+        return m.reply(`❌ Saldo insuficiente.
+
+💵 Precio: $${res.precio}
+💰 Tu saldo: $${res.saldo}`)
+      }
+
+      return m.reply('❌ No se pudo realizar la compra.')
+    }
+
+    await conn.sendMessage(m.sender, {
+      text: `🎉 *COMPRA REALIZADA*
+
+🎬 Producto:
+${res.venta.plataforma} ${res.venta.tipo}
+
+📦 Cuenta:
+${res.venta.cuenta}
+
+⚠️ No cambies datos de la cuenta.`
+    }).catch(() => {})
+
+    return m.reply(`✅ Compra realizada.
+
+📩 La cuenta fue enviada por privado.
+
+💰 Saldo restante:
+$${res.saldoRestante}`)
+  }
 
   if (command === 'versaldo') {
     const saldo = verSaldo(m.chat, m.sender)
-    return m.reply(`💰 Tu saldo es: *$${saldo}*`)
+    return m.reply(`💰 Tu saldo actual es: *$${saldo}*`)
   }
-
-  // =====================
-  // AGREGAR SALDO
-  // =====================
 
   if (command === 'addsaldo') {
-
-    let usuario = m.mentionedJid?.[0]
-
-    if (!usuario)
-      return m.reply('Etiqueta al usuario.')
-
+    const user = m.mentionedJid?.[0]
     const cantidad = Number(args[1])
 
-    if (isNaN(cantidad))
-      return m.reply('Cantidad inválida.')
+    if (!user || isNaN(cantidad)) {
+      return m.reply('Uso:\n.addsaldo @usuario 200')
+    }
 
-    const saldo = registrarSaldo(m.chat, usuario, cantidad)
+    const saldo = registrarSaldo(m.chat, user, cantidad)
 
-    return m.reply(`✅ Saldo agregado
+    return m.reply(`✅ Saldo agregado.
 
-Usuario:
-@${usuario.split('@')[0]}
+👤 Usuario:
+@${user.split('@')[0]}
 
-Anterior:
-$${saldo.anterior}
+💵 Se agregó:
+$${cantidad}
 
-Actual:
-$${saldo.actual}`, {
-      mentions:[usuario]
-    })
-
+💰 Saldo actual:
+$${saldo.actual}`, null, { mentions: [user] })
   }
-
-  // =====================
-  // RESTAR SALDO
-  // =====================
 
   if (command === 'delsaldo') {
-
-    let usuario = m.mentionedJid?.[0]
-
-    if (!usuario)
-      return m.reply('Etiqueta al usuario.')
-
+    const user = m.mentionedJid?.[0]
     const cantidad = Number(args[1])
 
-    if (isNaN(cantidad))
-      return m.reply('Cantidad inválida.')
+    if (!user || isNaN(cantidad)) {
+      return m.reply('Uso:\n.delsaldo @usuario 50')
+    }
 
-    const saldo = restarSaldo(m.chat, usuario, cantidad)
+    const saldo = restarSaldo(m.chat, user, cantidad)
 
-    return m.reply(`✅ Saldo actualizado
+    return m.reply(`✅ Saldo actualizado.
 
-Usuario:
-@${usuario.split('@')[0]}
+👤 Usuario:
+@${user.split('@')[0]}
 
-Saldo:
-$${saldo.actual}`, {
-      mentions:[usuario]
-    })
-
+💰 Saldo actual:
+$${saldo.actual}`, null, { mentions: [user] })
   }
-
-  // =====================
-  // EDITAR PRECIO
-  // =====================
 
   if (command === 'editarprecio') {
+    if (args.length < 3) return m.reply('Uso:\n.editarprecio netflix perfil 40')
 
-    if(args.length < 3)
-      return m.reply('.editarprecio netflix perfil 35')
+    const producto = editarPrecio(m.chat, args[0], args[1], args[2])
 
-    const plataforma=args[0]
-    const tipo=args[1]
-    const precio=args[2]
+    if (!producto) return m.reply('❌ Ese producto no existe.')
 
-    editarPrecio(m.chat,plataforma,tipo,precio)
+    return m.reply(`✅ Precio actualizado.
 
-    return m.reply('✅ Precio actualizado.')
-
+🎬 ${args[0]} ${args[1]}
+💵 Nuevo precio: $${args[2]}`)
   }
-
-  // =====================
-  // COMPRAR
-  // =====================
-
-  if(command==='comprar'){
-
-      if(args.length<2)
-      return m.reply('.comprar netflix perfil')
-
-      const venta=comprarProducto(
-        m.chat,
-        m.sender,
-        args[0],
-        args[1]
-      )
-
-      if(!venta.ok){
-
-          if(venta.motivo==='sin_stock')
-          return m.reply('❌ Sin stock.')
-
-          if(venta.motivo==='saldo_insuficiente')
-          return m.reply(`Saldo insuficiente.
-
-Necesitas:
-
-$${venta.precio}
-
-Tienes:
-
-$${venta.saldo}`)
-
-          return m.reply('No disponible.')
-
-      }
-
-      await conn.sendMessage(m.sender,{
-          text:`🎉 Compra realizada
-
-${venta.venta.cuenta}
-
-Gracias por comprar en Zentury Bot.`
-      })
-
-      return m.reply(`✅ Cuenta enviada por privado.
-
-Saldo restante:
-
-$${venta.saldoRestante}`)
-
-  }
-
-  // =====================
-  // ADDSTOCK
-  // =====================
-
-  if(command==='addstock'){
-
-      if(args.length<3)
-      return m.reply('.addstock netflix perfil 35')
-
-      const q=m.quoted
-
-      if(!q)
-      return m.reply('Responde un TXT o mensaje con las cuentas.')
-
-      let texto=''
-
-      if(q.text){
-
-          texto=q.text
-
-      }else{
-
-          const buffer=await q.download()
-
-          texto=buffer.toString()
-
-      }
-
-      const cuentas=prepararImportacion(texto)
-
-      const res=agregarStock(
-          m.chat,
-          args[0],
-          args[1],
-          args[2],
-          cuentas,
-          m.sender
-      )
-
-      return m.reply(`📦 STOCK CARGADO
-
-Plataforma:
-
-${args[0]}
-
-Tipo:
-
-${args[1]}
-
-Precio:
-
-$${args[2]}
-
-Agregadas:
-
-${res.agregadas}
-
-Duplicadas:
-
-${res.duplicadas}
-
-Disponibles:
-
-${res.total}`)
-
-  }
-
 }
 
-handler.help=[
-'addstock',
-'tienda',
-'comprar',
-'editarprecio',
-'versaldo',
-'addsaldo',
-'delsaldo'
+handler.help = [
+  'tienda',
+  'addstock',
+  'comprar',
+  'versaldo',
+  'addsaldo',
+  'delsaldo',
+  'editarprecio'
 ]
 
-handler.tags=['tienda']
-
-handler.command=/^(addstock|tienda|comprar|editarprecio|versaldo|addsaldo|delsaldo)$/i
+handler.tags = ['tienda']
+handler.command = /^(tienda|addstock|comprar|versaldo|addsaldo|delsaldo|editarprecio)$/i
 
 export default handler
