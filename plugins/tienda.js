@@ -13,20 +13,25 @@ import { prepararImportacion } from '../lib/importador.js'
 function obtenerUsuario(m, args = []) {
   if (m.mentionedJid && m.mentionedJid.length) return m.mentionedJid[0]
 
-  if (m.quoted && m.quoted.sender) return m.quoted.sender
+  const mencionado = m.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+  if (mencionado) return mencionado
 
-  const posible = args.find(a => /\d{8,}/.test(a))
-  if (posible) return posible.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
+  const posibleNumero = args.find(a => {
+    const limpio = String(a).replace(/[^0-9]/g, '')
+    return limpio.length >= 10 && !String(a).startsWith('@')
+  })
+
+  if (posibleNumero) return posibleNumero.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
 
   return null
 }
 
 function obtenerCantidad(args = []) {
-  const num = args
-    .map(a => String(a).replace(/[^0-9.]/g, ''))
-    .find(a => a && !isNaN(Number(a)))
+  const ultimo = args[args.length - 1]
+  if (!ultimo) return NaN
 
-  return num ? Number(num) : NaN
+  const limpio = String(ultimo).replace(/[^0-9.]/g, '')
+  return limpio ? Number(limpio) : NaN
 }
 
 const handler = async (m, { conn, command, args }) => {
@@ -49,17 +54,9 @@ const handler = async (m, { conn, command, args }) => {
     }
 
     const cuentas = prepararImportacion(texto)
-
     if (!cuentas.length) return m.reply('❌ No detecté cuentas para agregar.')
 
-    const res = agregarStock(
-      m.chat,
-      args[0],
-      args[1],
-      args[2],
-      cuentas,
-      m.sender
-    )
+    const res = agregarStock(m.chat, args[0], args[1], args[2], cuentas, m.sender)
 
     return m.reply(`📦 *STOCK CARGADO*
 
@@ -101,15 +98,44 @@ ${res.total}`)
     }
 
     await conn.sendMessage(m.sender, {
-      text: `🎉 *COMPRA REALIZADA*
+      text: `╔════════════════════╗
+        🛒 ALAN SHOP
+       ZENTURY BOT
+╚════════════════════╝
 
-🎬 Producto:
-${res.venta.plataforma} ${res.venta.tipo}
+✅ *COMPRA EXITOSA*
 
-📦 Cuenta:
+━━━━━━━━━━━━━━━━━━
+
+🎬 *Producto:*
+${res.venta.plataforma} • ${res.venta.tipo}
+
+📦 *Cuenta entregada:*
 ${res.venta.cuenta}
 
-⚠️ No cambies datos de la cuenta.`
+━━━━━━━━━━━━━━━━━━
+
+💵 *Precio:*
+$${res.venta.precio}
+
+💰 *Saldo restante:*
+$${res.saldoRestante}
+
+📅 *Fecha:*
+${new Date().toLocaleString('es-MX')}
+
+━━━━━━━━━━━━━━━━━━
+
+⚠️ *IMPORTANTE*
+
+• No cambies correo.
+• No cambies contraseña.
+• No elimines perfiles.
+• El incumplimiento anula garantía.
+
+━━━━━━━━━━━━━━━━━━
+
+🤖 Entrega automática por *ZENTURY BOT*`
     }).catch(() => {})
 
     return m.reply(`✅ Compra realizada.
@@ -131,11 +157,8 @@ $${res.saldoRestante}`)
 
     if (!user || isNaN(cantidad)) {
       return m.reply(`Uso:
-.addsaldo @usuario 200
-.addsaldo 5217715555998 200
-
-También puedes responder a un mensaje con:
-.addsaldo 200`)
+.addsaldo @cliente 200
+.addsaldo 5217715555998 200`)
     }
 
     const saldo = registrarSaldo(m.chat, user, cantidad)
@@ -161,11 +184,8 @@ $${saldo.actual}`,
 
     if (!user || isNaN(cantidad)) {
       return m.reply(`Uso:
-.delsaldo @usuario 50
-.delsaldo 5217715555998 50
-
-También puedes responder a un mensaje con:
-.delsaldo 50`)
+.delsaldo @cliente 50
+.delsaldo 5217715555998 50`)
     }
 
     const saldo = restarSaldo(m.chat, user, cantidad)
@@ -175,6 +195,9 @@ También puedes responder a un mensaje con:
 
 👤 Usuario:
 @${user.split('@')[0]}
+
+💵 Se restó:
+$${cantidad}
 
 💰 Saldo actual:
 $${saldo.actual}`,
@@ -186,7 +209,6 @@ $${saldo.actual}`,
     if (args.length < 3) return m.reply('Uso:\n.editarprecio netflix perfil 40')
 
     const producto = editarPrecio(m.chat, args[0], args[1], args[2])
-
     if (!producto) return m.reply('❌ Ese producto no existe.')
 
     return m.reply(`✅ Precio actualizado.
@@ -196,16 +218,7 @@ $${saldo.actual}`,
   }
 }
 
-handler.help = [
-  'tienda',
-  'addstock',
-  'comprar',
-  'versaldo',
-  'addsaldo',
-  'delsaldo',
-  'editarprecio'
-]
-
+handler.help = ['tienda', 'addstock', 'comprar', 'versaldo', 'addsaldo', 'delsaldo', 'editarprecio']
 handler.tags = ['tienda']
 handler.command = /^(tienda|addstock|comprar|versaldo|addsaldo|delsaldo|editarprecio)$/i
 
