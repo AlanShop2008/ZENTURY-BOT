@@ -52,8 +52,12 @@ function ownerNumbers() {
   return [...new Set([...fromConfig, ZENTURY_OWNER_NUMBER].map(v => cleanNumber(v)).filter(Boolean))]
 }
 
+function ownerLids() {
+  return Array.isArray(global.ownerLid) ? global.ownerLid : []
+}
+
 function isZenturyOwner(jid = '') {
-  return ownerNumbers().includes(cleanNumber(jid))
+  return ownerNumbers().includes(cleanNumber(jid)) || ownerLids().includes(jid)
 }
 
 function groupPath(groupId) {
@@ -84,7 +88,7 @@ function ensureZenturyBase() {
 }
 
 function ensureZenturyGroup(groupId, name = '') {
-  if (!groupId || !groupId.endsWith('@g.us')) return null
+  if (!groupId || !String(groupId).endsWith('@g.us')) return null
   ensureZenturyBase()
   ensureDir(groupPath(groupId))
 
@@ -128,7 +132,7 @@ function ensureZenturyGroup(groupId, name = '') {
 }
 
 function isGroupActive(groupId) {
-  if (!groupId || !groupId.endsWith('@g.us')) return true
+  if (!groupId || !String(groupId).endsWith('@g.us')) return true
   ensureZenturyGroup(groupId)
   const cfg = readJSON(groupFile(groupId, 'config.json'), defaultGroupConfig(groupId))
   if (!cfg.activo) return false
@@ -198,7 +202,7 @@ export async function handler(chatUpdate) {
         let isBotPrem = false;
         if (!isBotPrem) {
             try {
-                const botJid = this.user.jid.split('@')[0];
+                const botJid = (this.user?.jid || this.user?.id || global.conn?.user?.jid || global.conn?.user?.id || '').split('@')[0];
                 const premiumFilePath = path.join(`./${global.jadi}`, botJid, 'premium.json');
                 if (fs.existsSync(premiumFilePath)) {
                     const premiumConfig = JSON.parse(fs.readFileSync(premiumFilePath, 'utf8'));
@@ -270,8 +274,8 @@ export async function handler(chatUpdate) {
                 allantilink: true,
                 expired: 0,
             }
-            let settings = global.db.data.settings[this.user.jid]
-            if (typeof settings !== 'object') global.db.data.settings[this.user.jid] = {}
+            let settings = global.db.data.settings[this.user?.jid || this.user?.id || 'bot']
+            if (typeof settings !== 'object') global.db.data.settings[this.user?.jid || this.user?.id || 'bot'] = {}
             if (settings) {
                 if (!('self' in settings)) settings.self = false
                 if (!('autoread' in settings)) settings.autoread = false
@@ -280,7 +284,7 @@ export async function handler(chatUpdate) {
                 if (!('status' in settings)) settings.status = 0
                 if (!('noprefix' in settings)) settings.noprefix = false
                 if (!('logo' in settings)) settings.logo = null
-            } else global.db.data.settings[this.user.jid] = {
+            } else global.db.data.settings[this.user?.jid || this.user?.id || 'bot'] = {
                 self: false,
                 autoread: false,
                 restrict: true, 
@@ -293,7 +297,7 @@ export async function handler(chatUpdate) {
             console.error(e)
         }
 
-        const mainBot = global.conn.user.jid ? global.conn.user.jid : global.conn.user.id
+        const mainBot = global.conn?.user?.jid || global.conn?.user?.id || this.user?.jid || this.user?.id || ''
         const chat = global.db.data.chats[m.chat] || {}
         const isSubbs = chat.antiLag === true
         const allowedBots = chat.per || []
@@ -309,16 +313,27 @@ export async function handler(chatUpdate) {
         if (opts['swonly'] && m.chat !== 'status@broadcast') return
         if (typeof m.text !== 'string') m.text = ''
 
-        const sendNum = m.sender.replace(/[^0-9]/g, '')
-const isROwner = [conn.decodeJid(global.conn.user.jid), ...global.owner.map(([number]) => number)]
-  .map(v => v.replace(/[^0-9]/g, ''))
-  .includes(sendNum || conn.groupMetadata.participants.map(p => p.jid))
+        const sendNum = String(m.sender || '').replace(/[^0-9]/g, '')
+const botUserJid = this.user?.jid || this.user?.id || global.conn?.user?.jid || global.conn?.user?.id || ''
+const decodedBot = this.decodeJid ? this.decodeJid(botUserJid) : botUserJid
 
-const isSubBot = [conn.user.jid, ...global.owner.map(([number]) => `${number}@s.whatsapp.net`)].includes(m.sender || sendNum);
-const isPremSubs = global.db.data.users[m.sender]?.token === true && global.conns
-.map(c => conn.decodeJid(c.user?.id || ''))
-.map(v => v.replace(/[^0-9]/g, ''))
-.includes((sendNum || m.sender || '').replace(/[^0-9]/g, ''));
+const isROwner = [
+  cleanNumber(decodedBot),
+  ...ownerNumbers()
+].includes(sendNum)
+
+const isSubBot = [
+  botUserJid,
+  decodedBot,
+  ...ownerNumbers().map(number => `${number}@s.whatsapp.net`)
+].includes(m.sender)
+
+const isPremSubs = global.db.data.users[m.sender]?.token === true && Array.isArray(global.conns)
+  ? global.conns
+      .map(c => this.decodeJid ? this.decodeJid(c.user?.id || '') : (c.user?.id || ''))
+      .map(v => cleanNumber(v))
+      .includes(cleanNumber(sendNum || m.sender || ''))
+  : false
 
        const isOwner = isROwner     
        const modList = global.mods.map(v => v.replace(/[^0-9]/g, ''))
@@ -342,15 +357,17 @@ if (m.isBaileys)
         let _user = global.db.data && global.db.data.users && global.db.data.users[m.sender]
 
 async function getLidFromJid(id, conn) {
+id = String(id || '')
+if (!id) return ''
 if (id.endsWith('@lid')) return id
 const res = await conn.onWhatsApp(id).catch(() => [])
 return res[0]?.lid || id
 }
-const senderLid = await getLidFromJid(m.sender, conn)
-const botLid = await getLidFromJid(conn.user.jid, conn)
+const senderLid = await getLidFromJid(m.sender, this)
+const botLid = await getLidFromJid(this.user?.jid || this.user?.id || '', this)
 const senderJid = m.sender
-const botJid = conn.user.jid
-const groupMetadata = m.isGroup ? ((conn.chats[m.chat] || {}).metadata || await this.groupMetadata(m.chat).catch(_ => null)) : {}
+const botJid = this.user?.jid || this.user?.id || ''
+const groupMetadata = m.isGroup ? ((this.chats?.[m.chat] || {}).metadata || await this.groupMetadata(m.chat).catch(_ => null)) : {}
 const participants = m.isGroup ? (groupMetadata.participants || []) : []
 const user = participants.find(p => p.id === senderLid || p.phoneNumber === senderJid) || {};
 const isRAdmin = user?.admin === "superadmin" || user?.admin === "admin";
@@ -442,7 +459,7 @@ try {
                     continue
                 }
             const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
-            let _prefix = plugin.customPrefix ? plugin.customPrefix : global.db.data.settings[this?.user?.jid].noprefix ? "" : conn.prefix ? conn.prefix : global.prefix
+            let _prefix = plugin.customPrefix ? plugin.customPrefix : global.db.data.settings[this?.user?.jid || this?.user?.id || 'bot']?.noprefix ? "" : this.prefix ? this.prefix : global.prefix
             let match = (_prefix instanceof RegExp ? 
                 [[_prefix.exec(m.text), _prefix]] :
                 Array.isArray(_prefix) ? 
@@ -478,7 +495,7 @@ try {
             }
             if (typeof plugin !== 'function')
                 continue
-        if ((usedPrefix = (match && match[0]) || (global.db.data.settings[this.user.jid].noprefix && ''))) {
+        if ((usedPrefix = (match && match[0]) || (global.db.data.settings[this.user?.jid || this.user?.id || 'bot']?.noprefix && ''))) {
                 let noPrefix = m.text.replace(usedPrefix, '')
                 let [command, ...args] = noPrefix.trim().split` `.filter(v => v)
                 args = args || []
@@ -739,21 +756,21 @@ let chat = global.db.data.chats[id] || {}
             } catch (e) { console.error('Bienvenida bot error:', e) }
         case 'remove':
             if (chat.welcome) {
-                let groupMetadata = await this.groupMetadata(id) || (conn.chats[id] || {}).metadata
+                let groupMetadata = await this.groupMetadata(id).catch(() => null) || (this.chats?.[id] || {}).metadata || {}
                 for (let user of participants) {
-                    text = (action === 'add' ? (chat.sWelcome || this.welcome || conn.welcome || 'Bienvenido, @user').replace('@group', await this.getName(id)).replace('@desc', groupMetadata.desc?.toString() || 'Desconocido') :
-                        (chat.sBye || this.bye || conn.bye || 'Adiós, @user')).replace('@user', '@' + user.split('@')[0])
-                    let pp = global.db.data.settings[this.user.jid].logo || await this.profilePictureUrl(user, "image").catch(_ => imgM)
+                    text = (action === 'add' ? (chat.sWelcome || this.welcome || global.conn?.welcome || 'Bienvenido, @user').replace('@group', await this.getName(id)).replace('@desc', groupMetadata.desc?.toString() || 'Desconocido') :
+                        (chat.sBye || this.bye || global.conn?.bye || 'Adiós, @user')).replace('@user', '@' + user.split('@')[0])
+                    let pp = global.db.data.settings[this.user?.jid || this.user?.id || 'bot']?.logo || await this.profilePictureUrl(user, "image").catch(_ => imgM)
                     this.sendFile(id, action === 'add' ? pp : pp, 'pp.jpg', text, null, false, { mentions: [user] })
                 }
             }
             break
         case 'promote':
-            text = (chat.sPromote || this.spromote || conn.spromote || '@user ahora es administrador')
+            text = (chat.sPromote || this.spromote || global.conn?.spromote || '@user ahora es administrador')
         case 'demote':
             let pp = await this.profilePictureUrl(participants[0], 'image').catch(_ => logo) 
             if (!text)
-                text = (chat.sDemote || this.sdemote || conn.sdemote || '@user ya no es administrador')
+                text = (chat.sDemote || this.sdemote || global.conn?.sdemote || '@user ya no es administrador')
             text = text.replace('@user', '@' + participants[0].split('@')[0])
             if (chat.detect)    
             this.sendFile(id, pp, 'pp.jpg', text, null, false, { mentions: this.parseMention(text) })
