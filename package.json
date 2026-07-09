@@ -1,12 +1,10 @@
 {
   "name": "zentury-bot",
   "version": "1.0.0",
-  "description": "Zentury Bot - WhatsApp store and group automation bot",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "@hapi/boom": "latest",
@@ -25,7 +23,8 @@
     "qrcode-terminal": "latest",
     "syntax-error": "latest",
     "ws": "latest",
-    "yargs": "latest"
+    "yargs": "latest",
+    "yt-search": "latest"
   },
   "engines": {
     "node": ">=20"
