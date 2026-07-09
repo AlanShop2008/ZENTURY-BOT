@@ -44,6 +44,56 @@ function obtenerGrupoPorNumero(valor) {
   return grupos[index] || null
 }
 
+function limpiarNumero(jid = '') {
+  return String(jid || '').replace(/[^0-9]/g, '')
+}
+
+async function resolverPrivado(conn, m) {
+  const posibles = [
+    m.key?.participant,
+    m.participant,
+    m.sender,
+    m.from
+  ].filter(Boolean)
+
+  for (const jid of posibles) {
+    const texto = String(jid)
+
+    if (texto.endsWith('@s.whatsapp.net')) return texto
+
+    if (texto.endsWith('@lid')) {
+      try {
+        const meta = m.isGroup ? await conn.groupMetadata(m.chat).catch(() => null) : null
+        const participantes = meta?.participants || []
+
+        const encontrado = participantes.find(p =>
+          p.id === texto ||
+          p.jid === texto ||
+          p.lid === texto ||
+          p.phoneNumber === texto
+        )
+
+        const real =
+          encontrado?.jid ||
+          encontrado?.phoneNumber ||
+          encontrado?.id
+
+        if (real && String(real).endsWith('@s.whatsapp.net')) return real
+
+        const numero = limpiarNumero(real || '')
+        if (numero.length >= 10) return `${numero}@s.whatsapp.net`
+      } catch {}
+    }
+
+    const numero = limpiarNumero(texto)
+    if (numero.length >= 10 && !texto.endsWith('@g.us')) {
+      return `${numero}@s.whatsapp.net`
+    }
+  }
+
+  return m.sender
+}
+
 const handler = async (m, { conn, command, args }) => {
   if (command === 'grupos') {
     const grupos = listarGrupos()
@@ -104,7 +154,7 @@ Primero usa:
     const tipo = args[2]
     const precio = args[3]
 
-    if (!groupId.endsWith('@g.us')) {
+    if (!String(groupId).endsWith('@g.us')) {
       return m.reply(`❌ Grupo inválido.
 
 Usa:
@@ -177,8 +227,13 @@ ${res.total}`)
       return m.reply('❌ No se pudo realizar la compra.')
     }
 
-    await conn.sendMessage(m.sender, {
-      text: `╔════════════════════╗
+    const destinoPrivado = await resolverPrivado(conn, m)
+
+    let enviadoPrivado = false
+
+    try {
+      await conn.sendMessage(destinoPrivado, {
+        text: `╔════════════════════╗
         🛒 ALAN SHOP
        ZENTURY BOT
 ╚════════════════════╝
@@ -216,7 +271,19 @@ ${new Date().toLocaleString('es-MX')}
 ━━━━━━━━━━━━━━━━━━
 
 🤖 Entrega automática por *ZENTURY BOT*`
-    }).catch(() => {})
+      })
+
+      enviadoPrivado = true
+    } catch (e) {
+      console.log('ERROR ENVIANDO PRIVADO:', e)
+    }
+
+    if (!enviadoPrivado) {
+      return m.reply(`⚠️ Compra procesada, pero no pude enviarte privado.
+
+Abre chat conmigo primero y mándame:
+.hola`)
+    }
 
     return m.reply(`✅ Compra realizada.
 
