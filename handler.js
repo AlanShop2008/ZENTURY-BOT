@@ -368,11 +368,11 @@ const botLid = await getLidFromJid(this.user?.jid || this.user?.id || '', this)
 const senderJid = m.sender
 const botJid = this.user?.jid || this.user?.id || ''
 const groupMetadata = m.isGroup ? ((this.chats?.[m.chat] || {}).metadata || await this.groupMetadata(m.chat).catch(_ => null)) : {}
-const participants = m.isGroup ? (groupMetadata.participants || []) : []
-const user = participants.find(p => p.id === senderLid || p.phoneNumber === senderJid) || {};
+const participants = m.isGroup ? (groupMetadata?.participants || []) : []
+const user = participants.find(p => p.id === senderLid || p.phoneNumber === senderJid || p.jid === senderJid) || {};
 const isRAdmin = user?.admin === "superadmin" || user?.admin === "admin";
 const isAdmin = isRAdmin || user?.admin === "admin";
-const bot = participants.find(p => p.id === botLid || p.phoneNumber === botJid) || {};
+const bot = participants.find(p => p.id === botLid || p.phoneNumber === botJid || p.jid === botJid) || {};
 const isBotAdmin = !!bot?.admin;
 
 // ===============================
