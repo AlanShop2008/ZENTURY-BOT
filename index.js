@@ -243,7 +243,7 @@ if (!fs.existsSync(`${SESSIONS_DIR}/creds.json`)) {
   }
 }
 
-conn.isInit = false
+global.conn.isInit = false
 global.stopped = 'init'
 
 if (!global.opts['test']) {
@@ -306,7 +306,13 @@ async function connectionUpdate(update) {
   }
 }
 
-process.on('uncaughtException', console.error)
+process.on('uncaughtException', (err) => {
+  console.error('UNCaughtException:', err)
+})
+
+process.on('unhandledRejection', (err) => {
+  console.error('UnhandledRejection:', err)
+})
 
 let isInit = true
 let handler = await import('./handler.js')
